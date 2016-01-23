@@ -15,6 +15,8 @@ struct Node
 
 typedef std::shared_ptr<Node> Node_p;
 
+bool operator==(Node const& lhs, Node const& rhs) { return (&lhs == &rhs); }
+
 std::tuple<int, Node_p> make_neighbor(int dist, Node neighbor) {
   return std::tuple<int, Node_p>(dist, std::make_shared<Node>(neighbor));
 }
@@ -64,6 +66,24 @@ void fill_graph(std::vector<Node> & graph) {
 
 // Returns the cost. Passes back a reference to the winning path in the last argument
 int dijkstra(std::vector<Node> const& nodes, std::vector<Node> & path) {
+  std::vector<Node> not_visited{nodes};
+
+  int current_node = 0;
+  Node cur = nodes[current_node];
+  std::vector<Node_p> visitable;
+
+  while (!not_visited.empty()) {
+    cur = nodes[current_node];
+    visitable.clear();
+
+    for (auto i : not_visited) {
+      for (auto j : cur.neighbors) {
+        if (i == *(std::get<1>(j))) { // If one of the not visited nodes is in the neighborhood
+          visitable.push_back(std::make_shared<Node>(i));
+        }
+      }
+    }
+  }
 
   return -1;
 }
@@ -72,6 +92,8 @@ int main(int argc, char* argv[]) {
   // define graph:
   std::vector<Node> graph;
   fill_graph(graph);
+  std::vector<Node> winning_path;
+  std::cout << "cost: " << dijkstra(graph, winning_path) << std::endl;
 
 
   std::cout << "Hello world!" << std::endl;
