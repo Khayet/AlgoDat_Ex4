@@ -1,88 +1,87 @@
 #include <iostream>
 #include <vector>
 #include <tuple>
-#include <limits> // INF
+#include <limits> // max()
 #include <memory> // shared_ptr
 
-const int INF = std::numeric_limits<int>::infinity();
+// Not truly infinite of course, because integers are always finite in C++, but larger than any input value
+const int INF = std::numeric_limits<int>::max();
 
 struct Node
 {
-  int cost;
-  std::shared_ptr<Node> prev;
-  std::vector<std::tuple<int, std::shared_ptr<Node>>> neighbors;
+  Node(int c, std::shared_ptr<Node> p, std::vector<std::tuple<int, std::shared_ptr<Node>>> n) :
+    cost(c), prev(p), neighbors(n) {}
+
+  Node(int c) : cost(c), prev(std::shared_ptr<Node>()), neighbors({}) {}
+
+  int cost; // The cost to reach the node
+  std::shared_ptr<Node> prev; // The node that comes in front of this one in the path
+  std::vector<std::tuple<int, std::shared_ptr<Node>>> neighbors; // The nodes that are visitable from this one in one step
 };
 
+
 typedef std::shared_ptr<Node> Node_p;
+typedef std::vector<std::tuple<int, std::shared_ptr<Node>>> Arc;
 
-bool operator==(Node const& lhs, Node const& rhs) { return (&lhs == &rhs); }
-
-std::tuple<int, Node_p> make_neighbor(int dist, Node neighbor) {
-  return std::tuple<int, Node_p>(dist, std::make_shared<Node>(neighbor));
-}
-
-// Takes graph as argument and fills it with nodes
-void fill_graph(std::vector<Node> & graph) {
-  // a := first node, b := second node, ...
-
-  Node a{0, Node_p(), {}};
-  graph.push_back( a ); // 1
-
-  Node b{INF, Node_p(), {}};
-  graph.push_back( b ); // 2
-
-  Node c{INF, Node_p(), {}};
-  graph.push_back( c ); // 3
-
-  Node d{INF, Node_p(), {}};
-  graph.push_back( d ); // 4
-
-  Node e{INF, Node_p(), {}};
-  graph.push_back( e ); // 5
-
-  Node f{INF, Node_p(), {}};
-  graph.push_back( f ); // 6
-
-  Node g{INF, Node_p(), {}};
-  graph.push_back( g ); // 7
-
-  Node h{INF, Node_p(), {}};
-  graph.push_back( h ); // 8
-
-  Node i{INF, Node_p(), {}};
-  graph.push_back( i ); // 9
-
-  // Fill adjacency lists of nodes:
-  a.neighbors = {make_neighbor(25, b), make_neighbor(15, c)};
-  b.neighbors = {make_neighbor(10, c), make_neighbor(30, e)};
-  c.neighbors = {make_neighbor(80, b), make_neighbor(30, e)};
-  d.neighbors = {make_neighbor(20, e), make_neighbor(10, g)};
-  e.neighbors = {make_neighbor(70, d), make_neighbor( 6, g)};
-  f.neighbors = {make_neighbor(30, g), make_neighbor(37, h)};
-  g.neighbors = {make_neighbor( 7, i)};
-  h.neighbors = {make_neighbor(69, i)};
-
-}
 
 // Returns the cost. Passes back a reference to the winning path in the last argument
-int dijkstra(std::vector<Node> const& nodes, std::vector<Node> & path) {
-  std::vector<Node> not_visited{nodes};
+int dijkstra(std::vector<Node_p> const& nodes, Node_p first_element, Node_p last_element, std::vector<Node> & path) {
+  std::vector<Node_p> not_visited{nodes};
+  int sum_cost = 0;
 
-  int current_node = 0;
-  Node cur = nodes[current_node];
-  std::vector<Node_p> visitable;
+  // int current_node = 0;
+  Node_p cur = nodes.front();
+  std::vector<Arc> visitable;
 
   while (!not_visited.empty()) {
-    cur = nodes[current_node];
+    // cur = nodes[current_node];
     visitable.clear();
 
-    for (auto i : not_visited) {
-      for (auto j : cur.neighbors) {
-        if (i == *(std::get<1>(j))) { // If one of the not visited nodes is in the neighborhood
-          visitable.push_back(std::make_shared<Node>(i));
+    for (int i=0; i < not_visited.size(); ++i) {
+      for (int j=0; j < cur->neighbors.size(); ++j) {
+        auto cur_neighbor = std::get<1>(cur->neighbors[j]);
+        if ( not_visited[i] == cur_neighbor ) { // If one of the not visited nodes is in the neighborhood
+          visitable.emplace_back(cur->neighbors[j]);
         }
       }
     }
+
+    // Choose next node:
+    if (!visitable.empty()) {
+      auto visit = visitable.front();
+      int smallest_cost = INF;
+      int visitable_cost, cost_to_visit;
+      Node_p foo;
+
+      for (int i=0; i < visitable.size(); ++i) {
+        std::tie(std::ignore, foo) = visitable[i];
+        visitable_cost = foo->cost;
+        cost_to_visit = (cur->cost + std::get<0>(visitable[i]));
+
+        // Update cost for visitable nodes:
+        if (cost_to_visit < visitable_cost) {
+          (std::get<1>(visitable[i]))->cost = cost_to_visit;
+        }
+
+        // Choose next destination:
+        if (cost_to_visit < smallest_cost) {
+          visit = visitable[i];
+        }
+      }
+    }
+
+    // Go to next node:
+    not_visited.remove(cur);
+    sum_cost += std::get<1>(visit)->cost;
+    std::get<1>(visit)->prev = cur;
+    cur = std::get<1>(visit);
+  }
+
+  // Build path by tracing back:
+  Node_p t = last_element;
+  while (t != first_element()) {
+    path.push_front(*t);
+    t = t->prev;
   }
 
   return -1;
@@ -90,11 +89,41 @@ int dijkstra(std::vector<Node> const& nodes, std::vector<Node> & path) {
 
 int main(int argc, char* argv[]) {
   // define graph:
-  std::vector<Node> graph;
-  fill_graph(graph);
-  std::vector<Node> winning_path;
-  std::cout << "cost: " << dijkstra(graph, winning_path) << std::endl;
+  std::vector<Node_p> graph;
 
+  // a := first node, b := second node, ...
+  auto a = std::make_shared<Node>(Node{0, Node_p(), {} });
+  auto b = std::make_shared<Node>(Node{INF, Node_p(), {} });
+  auto c = std::make_shared<Node>(Node{INF, Node_p(), {} });
+  auto d = std::make_shared<Node>(Node{INF, Node_p(), {} });
+  auto e = std::make_shared<Node>(Node{INF, Node_p(), {} });
+  auto f = std::make_shared<Node>(Node{INF, Node_p(), {} });
+  auto g = std::make_shared<Node>(Node{INF, Node_p(), {} });
+  auto h = std::make_shared<Node>(Node{INF, Node_p(), {} });
+  auto i = std::make_shared<Node>(Node{INF, Node_p(), {} });
+
+  // Fill adjacency lists of nodes:
+  (a->neighbors).push_back(std::tuple<int, Node_p>(25, b)); (a->neighbors).push_back(std::tuple<int, Node_p>(15, c));
+  (b->neighbors).push_back(std::tuple<int, Node_p>(10, c)); (b->neighbors).push_back(std::tuple<int, Node_p>(30, e));
+  (c->neighbors).push_back(std::tuple<int, Node_p>(80, b)); (c->neighbors).push_back(std::tuple<int, Node_p>(30, e));
+  (d->neighbors).push_back(std::tuple<int, Node_p>(20, e)); (d->neighbors).push_back(std::tuple<int, Node_p>(10, g));
+  (e->neighbors).push_back(std::tuple<int, Node_p>(70, d)); (e->neighbors).push_back(std::tuple<int, Node_p>( 6, g));
+  (f->neighbors).push_back(std::tuple<int, Node_p>(30, g)); (f->neighbors).push_back(std::tuple<int, Node_p>(37, h));
+  (g->neighbors).push_back(std::tuple<int, Node_p>( 7, i));
+  (h->neighbors).push_back(std::tuple<int, Node_p>(69, i));
+
+  graph.push_back( a ); // 1
+  graph.push_back( b ); // 2
+  graph.push_back( c ); // 3
+  graph.push_back( d ); // 4
+  graph.push_back( e ); // 5
+  graph.push_back( f ); // 6
+  graph.push_back( g ); // 7
+  graph.push_back( h ); // 8
+  graph.push_back( i ); // 9
+
+  std::vector<Node> winning_path;
+  std::cout << "cost: " << dijkstra(graph, a, i, winning_path) << std::endl;
 
   std::cout << "Hello world!" << std::endl;
 
